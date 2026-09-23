@@ -1,0 +1,10 @@
+    name: CI - webapp_icon_repair
+    on:
+      push:
+        branches: [ "main" ]
+    jobs:
+      build:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: shellcheck src/*.sh
