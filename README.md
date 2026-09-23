@@ -1,10 +1,10 @@
 # Corretor Web App
 
-Ferramenta Bash para **corrigir automaticamente os ícones de Web Apps e atalhos `.desktop` presentes na Área de Trabalho do Linux**.
+Ferramenta para **corrigir automaticamente os ícones de Web Apps e atalhos `.desktop` presentes na Área de Trabalho do Linux**.
 
-O projeto foi criado principalmente para resolver um problema comum no **Zorin OS**: Web Apps instalados pelo navegador aparecem normalmente no menu do sistema, com seus respectivos ícones, mas ao serem adicionados novamente à Área de Trabalho o atalho pode aparecer sem o ícone correto.
+O projeto foi criado principalmente para resolver um problema comum com Web Apps instalados pelo navegador aparecem normalmente no menu do sistema, com seus respectivos ícones, mas ao serem adicionados novamente à Área de Trabalho o atalho pode aparecer sem o ícone correto.
 
-O **Corretor Web App** procura o ícone real instalado no sistema e atualiza o atalho existente sem recriá-lo.
+O **Web App Icon Repair** procura o ícone real instalado no sistema e atualiza o atalho existente sem recriá-lo.
 
 ---
 
@@ -371,7 +371,7 @@ Algumas funcionalidades podem ser adicionadas em versões futuras:
 atualizar-icones
 ```
 
-* Integração com o menu de aplicativos do Zorin.
+* Integração com o menu de aplicativos do sistema.
 * Verificação automática ao iniciar a sessão.
 * Monitoramento da Área de Trabalho para novos Web Apps.
 * Sistema de logs.
@@ -384,13 +384,13 @@ MIT License.
 
 ---
 
-## 👤 Autor
+## 👨‍💻 Developed by
+**César Godinho (CSRG42)**
 
-**César Godinho**
-
-GitHub:
-
-**CSRG42**
+## 🌐 Links
+- [GitHub](https://github.com/CSRG42)
+- [Instagram](https://instagram.com/csrg42/)
+- [YouTube](https://youtube.com/seucanal)
 
 ---
 
@@ -398,7 +398,7 @@ GitHub:
 
 **Versão inicial — funcional**
 
-O projeto foi criado para solucionar especificamente o problema de ícones ausentes em atalhos de Web Apps na Área de Trabalho do Zorin OS.
+O projeto foi criado para solucionar especificamente o problema de ícones ausentes em atalhos de Web Apps na Área de Trabalho em sistemas Linux.
 
-O funcionamento foi validado com Web App instalado pelo **Brave Browser**.
+O script foi testado com Web App instalado pelo **Brave Browser**.
 
