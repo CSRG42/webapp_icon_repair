@@ -3,7 +3,7 @@ set -u
 # ==============================================================================
 # Project: webapp_icon_repair
 # Stack:   Bash
-# Version: 1.0.0
+# Version: 1.0.3
 # Author:  César Godinho (CSRG42)
 # License: MIT License
 # Created: 22/09/2026 00:43
@@ -14,16 +14,16 @@ set -u
 # Compatível com Zorin OS / GNOME
 #
 # Objetivo:
-#   Corrigir ícones dos .desktop que JÁ estão na Área de Trabalho.
+#    Corrigir ícones dos .desktop que JÁ estão na Área de Trabalho.
 #
 # O script:
-#   - Não cria atalhos
-#   - Não remove atalhos
-#   - Não altera aplicativos apenas presentes no menu
-#   - Faz backup antes de modificar
-#   - Procura ícones em vários diretórios
-#   - Prioriza ícones maiores
-#   - Funciona com Brave, Chromium, Chrome, Edge, Vivaldi etc.
+#    - Não cria atalhos
+#    - Não remove atalhos
+#    - Não altera aplicativos apenas presentes no menu
+#    - Faz backup antes de modificar
+#    - Procura ícones em vários diretórios
+#    - Prioriza ícones maiores
+#    - Funciona com Brave, Chromium, Chrome, Edge, Vivaldi etc.
 # ============================================================
 
 set -o pipefail
@@ -41,7 +41,7 @@ mkdir -p "$BACKUP_DIR"
 
 echo
 echo "=============================================="
-echo "   ATUALIZADOR DE ÍCONES DE WEB APPS"
+echo "    ATUALIZADOR DE ÍCONES DE WEB APPS"
 echo "=============================================="
 echo
 echo "Área de Trabalho:"
@@ -290,11 +290,10 @@ for file in "${DESKTOP_FILES[@]}"; do
     fi
 
     # --------------------------------------------------------
-    # Obtém Name, Exec e Icon
+    # Obtém Name e Icon
     # --------------------------------------------------------
 
     name="$(get_desktop_value "Name" "$file")"
-    exec_line="$(get_desktop_value "Exec" "$file")"
     icon="$(get_desktop_value "Icon" "$file")"
 
     echo "  Nome : ${name:-desconhecido}"
@@ -395,8 +394,8 @@ echo "RESULTADO"
 echo "=============================================="
 echo
 echo "Atalhos encontrados : $FOUND"
-echo "Ícones atualizados  : $UPDATED"
-echo "Ignorados           : $SKIPPED"
+echo "Ícones atualizados   : $UPDATED"
+echo "Ignorados            : $SKIPPED"
 echo
 echo "Backup:"
 echo "$BACKUP_DIR"
