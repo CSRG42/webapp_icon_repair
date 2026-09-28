@@ -213,6 +213,8 @@ while true; do
     echo -e "  9) 🔐 Privacidade do repositório"
     echo -e " 10) 🗑️ Deletar repositório"
     echo -e " 11) ✏️ Corrigir último commit (texto)"
+    #echo -e " 12) ☢️ REINICIAR DO ZERO (LIMPAR TUDO)"
+    #echo -e " 13) 🚨 ZERAR REPOSITÓRIO (WIPE TOTAL)"
     echo -e "\n  0) 👋 Sair"
     echo -e "${GREEN}------------------------------------------${NC}"
     
@@ -229,37 +231,50 @@ while true; do
             echo -e "${GREEN}└──────────────────────────────────────────┘${NC}"
 
             GH_USER=$(gh api user -q .login 2>/dev/null)
+            CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+            [[ -z "$CURRENT_BRANCH" ]] && CURRENT_BRANCH="main"
 
             if git remote | grep -q "origin"; then
-                echo -e "${BLUE}📡 Puxando atualizações e enviando alterações para o GitHub...${NC}"
-                git pull origin "$CURRENT_BRANCH" --rebase
-                
-                if git push -u origin "$CURRENT_BRANCH"; then
-                    echo -e "\n${GREEN}✅ Repositório local e GitHub sincronizados com sucesso!${NC}"
-                else
-                    echo -e "\n${RED}❌ Falha ao enviar arquivos. Verifique os erros acima.${NC}"
+                echo -e "${BLUE}📡 Conectando ao GitHub...${NC}"
+                git fetch origin >/dev/null 2>&1
+
+                # Se a branch remota existir, alinha o histórico antes
+                if git rev-parse --verify "origin/$CURRENT_BRANCH" &>/dev/null; then
+                    if ! git rev-parse --verify HEAD &>/dev/null; then
+                        git reset --mixed "origin/$CURRENT_BRANCH"
+                    fi
+                    
+                    # Guarda alterações locais temporariamente
+                    git stash push -u -m "autostash_sync" >/dev/null 2>&1
+                    git pull origin "$CURRENT_BRANCH" --rebase
+                    git stash pop >/dev/null 2>&1
                 fi
             else
                 REPO_EXISTS=$(gh repo view "$GH_USER/$REPO_NAME" --json name -q .name 2>/dev/null)
-                
                 if [[ -n "$REPO_EXISTS" ]]; then
-                    echo -e "${BLUE}🔗 Vinculando e enviando para o repositório existente no GitHub...${NC}"
-                    if compgen -G "$HOME/.ssh/id_*" > /dev/null 2>&1; then
-                        git remote add origin "git@github.com:$GH_USER/$REPO_NAME.git"
-                    else
-                        git remote add origin "https://github.com/$GH_USER/$REPO_NAME.git"
-                    fi
-                    git push -u origin "$CURRENT_BRANCH"
+                    echo -e "${BLUE}🔗 Vinculando ao repositório existente no GitHub...${NC}"
+                    git remote add origin "git@github.com:$GH_USER/$REPO_NAME.git" 2>/dev/null || \
+                    git remote add origin "https://github.com/$GH_USER/$REPO_NAME.git"
+                    git fetch origin
+                    git reset --mixed "origin/main"
                 else
                     echo -e "${YELLOW}✨ Criando novo repositório no GitHub...${NC}"
-                    if gh repo create "$REPO_NAME" --private --source=. --remote=origin; then
-                        git branch -M main
-                        git push -u origin main
-                        echo -e "${GREEN}✅ Novo repositório criado e sincronizado!${NC}"
-                    else
-                        echo -e "${RED}❌ Falha ao criar repositório no GitHub.${NC}"
-                    fi
+                    gh repo create "$REPO_NAME" --private --source=. --remote=origin
                 fi
+            fi
+
+            # Realiza o commit das pendências se houver
+            if [[ -n $(git status --porcelain) ]]; then
+                echo -e "${BLUE}📦 Salvando alterações locais...${NC}"
+                git add .
+                git commit -m "🛠️ chores: sincronização automática de arquivos"
+            fi
+
+            git branch -M main
+            if git push -u origin main; then
+                echo -e "\n${GREEN}✅ Repositório local e GitHub sincronizados com sucesso!${NC}"
+            else
+                echo -e "\n${RED}❌ Falha ao enviar arquivos. Verifique se há conflitos manuais.${NC}"
             fi
 
             pause
@@ -700,6 +715,89 @@ while true; do
             pause
             ;;
 
+        12) # REINICIAR DO ZERO
+            printf "\033[H\033[J"
+            get_context
+
+            echo -e "${RED}┌──────────────────────────────────────────┐${NC}"
+            echo -e "${RED}│      🚨 PERIGO: REINICIAR PROJETO        │${NC}"
+            echo -e "${RED}└──────────────────────────────────────────┘${NC}"
+            echo -e "Esta opção irá deletar TODO o histórico do Git local."
+            echo -e "Os seus arquivos serão mantidos, mas o Git será resetado."
+            echo -e "Útil para transformar um projeto velho em um novo 'v1.0.0'."
+            
+            echo -e "\n${YELLOW}Deseja apagar o histórico e começar do zero? (y/n)${NC}"
+            read -rp "👉 Escolha: " CONFIRM
+
+            if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+                echo -e "\n${YELLOW}💣 Explodindo pasta .git e reiniciando...${NC}"
+                
+                rm -rf .git
+                
+                git init -b main &>/dev/null
+                
+                # (O get_context vai atualizar o cabeçalho automaticamente)
+                
+                echo -e "${GREEN}✅ O projeto foi reiniciado com sucesso!${NC}"
+                echo -e "Agora você pode usar a ${YELLOW}Opção 1${NC} para criar um novo repo no GitHub."
+            else
+                echo -e "\n${BLUE}ℹ️  Operação cancelada.${NC}"
+            fi
+
+            pause
+            ;;
+
+        13) # ZERAR REPOSITÓRIO
+            printf "\033[H\033[J"
+            REPO_NAME=$(basename "$PWD") # Pega o nome da pasta atual
+            
+            echo -e "${RED}┌──────────────────────────────────────────┐${NC}"
+            echo -e "${RED}│      🚨 PERIGO: DESTRUIÇÃO TOTAL         │${NC}"
+            echo -e "${RED}└──────────────────────────────────────────┘${NC}"
+            echo -e "Esta opção irá apagar TUDO na pasta: ${YELLOW}$REPO_NAME${NC}"
+            read -rp "👉 Digite 'LIMPAR' para confirmar: " CONFIRM_CLEAN
+
+            if [[ "$CONFIRM_CLEAN" == "LIMPAR" ]]; then
+                echo -e "\n${YELLOW}💣 Iniciando limpeza profunda...${NC}"
+                
+                rm -rf .git
+                find . -maxdepth 1 ! -name "$(basename "$0")" ! -name "." -exec rm -rf {} +
+                
+                git init -b main &>/dev/null
+                echo "1.0.0" > .devlab_version
+                echo "Shell" > .devlab_stack
+                
+                echo -e "${GREEN}✅ Pasta limpa!${NC}"
+                
+                echo -e "${YELLOW}🔍 Verificando se existe backup no GitHub...${NC}"
+                ensure_gh_auth
+                GH_USER=$(gh api user -q .login)
+                
+                if gh repo view "$GH_USER/$REPO_NAME" &>/dev/null; then
+                    echo -e "${BLUE}ℹ️  Repositório encontrado no GitHub!${NC}"
+                    read -rp "❓ Deseja restaurar os arquivos agora? (y/n): " RESTORE_OPT
+                    
+                    if [[ "$RESTORE_OPT" =~ ^[Yy]$ ]]; then
+                        echo -e "${YELLOW}📡 Restaurando via Modo À Prova de Falhas...${NC}"
+                        git remote add origin "https://github.com/$GH_USER/$REPO_NAME.git"
+                        git fetch origin main &>/dev/null
+                        
+                        if git reset --hard origin/main; then
+                            echo -e "${GREEN}✅ Sincronização completa! O projeto foi restaurado.${NC}"
+                        else
+                            echo -e "${RED}❌ Falha ao sincronizar. Tente a Opção 4 manualmente.${NC}"
+                        fi
+                    fi
+                else
+                    echo -e "${YELLOW}ℹ️  Nenhum repositório encontrado com o nome '${REPO_NAME}'.${NC}"
+                    echo -e "Você pode iniciar um novo projeto do zero agora."
+                fi
+            else
+                echo -e "\n${BLUE}ℹ️  Operação cancelada.${NC}"
+            fi
+            pause
+            ;;
+            
         0) # SAIR
             printf "\033[H\033[J"
             echo -e "${GREEN} Atividades encerradas no DevLab Manager. Até logo! 👋${NC}\n"
