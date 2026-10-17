@@ -227,7 +227,7 @@ while true; do
             ensure_gh_auth
 
             echo -e "${GREEN}┌──────────────────────────────────────────┐${NC}"
-            echo -e "${GREEN}│        🔄 SINCRONIZAÇÃO INTELIGENTE      │${NC}"
+            echo -e "${GREEN}│         🔄 SINCRONIZAÇÃO INTELIGENTE     │${NC}"
             echo -e "${GREEN}└──────────────────────────────────────────┘${NC}"
 
             GH_USER=$(gh api user -q .login 2>/dev/null)
@@ -238,16 +238,20 @@ while true; do
                 echo -e "${BLUE}📡 Conectando ao GitHub...${NC}"
                 git fetch origin >/dev/null 2>&1
 
-                # Se a branch remota existir, alinha o histórico antes
+                # Se a branch remota existir no GitHub
                 if git rev-parse --verify "origin/$CURRENT_BRANCH" &>/dev/null; then
-                    if ! git rev-parse --verify HEAD &>/dev/null; then
-                        git reset --mixed "origin/$CURRENT_BRANCH"
-                    fi
                     
-                    # Guarda alterações locais temporariamente
-                    git stash push -u -m "autostash_sync" >/dev/null 2>&1
-                    git pull origin "$CURRENT_BRANCH" --rebase
-                    git stash pop >/dev/null 2>&1
+                    # SE A PASTA LOCAL ESTIVER VAZIA (Sem commits/HEAD):
+                    # Baixa o projeto com segurança.
+                    if ! git rev-parse --verify HEAD &>/dev/null; then
+                        echo -e "${BLUE}📥 Pasta local vazia detectada. Baixando arquivos do GitHub...${NC}"
+                        git checkout -b "$CURRENT_BRANCH" "origin/$CURRENT_BRANCH" 2>/dev/null || git reset --hard "origin/$CURRENT_BRANCH"
+                    else
+                        # Se já houver histórico local, faz a sincronização normal via pull/rebase
+                        git stash push -u -m "autostash_sync" >/dev/null 2>&1
+                        git pull origin "$CURRENT_BRANCH" --rebase
+                        git stash pop >/dev/null 2>&1
+                    fi
                 fi
             else
                 REPO_EXISTS=$(gh repo view "$GH_USER/$REPO_NAME" --json name -q .name 2>/dev/null)
@@ -256,22 +260,27 @@ while true; do
                     git remote add origin "git@github.com:$GH_USER/$REPO_NAME.git" 2>/dev/null || \
                     git remote add origin "https://github.com/$GH_USER/$REPO_NAME.git"
                     git fetch origin
-                    git reset --mixed "origin/main"
+                    
+                    if ! git rev-parse --verify HEAD &>/dev/null; then
+                        git checkout -b "$CURRENT_BRANCH" "origin/main" 2>/dev/null || git reset --hard "origin/main"
+                    else
+                        git reset --mixed "origin/main"
+                    fi
                 else
                     echo -e "${YELLOW}✨ Criando novo repositório no GitHub...${NC}"
                     gh repo create "$REPO_NAME" --private --source=. --remote=origin
                 fi
             fi
 
-            # Realiza o commit das pendências se houver
+            # Realiza o commit das pendências se houver (incluindo exclusões com -A)
             if [[ -n $(git status --porcelain) ]]; then
                 echo -e "${BLUE}📦 Salvando alterações locais...${NC}"
-                git add .
+                git add -A
                 git commit -m "🛠️ chores: sincronização automática de arquivos"
             fi
 
-            git branch -M main
-            if git push -u origin main; then
+            git branch -M "$CURRENT_BRANCH"
+            if git push -u origin "$CURRENT_BRANCH"; then
                 echo -e "\n${GREEN}✅ Repositório local e GitHub sincronizados com sucesso!${NC}"
             else
                 echo -e "\n${RED}❌ Falha ao enviar arquivos. Verifique se há conflitos manuais.${NC}"
@@ -445,42 +454,81 @@ while true; do
                 echo -e "${RED}❌ Erro: Nenhum repositório remoto (origin) configurado.${NC}"
                 echo -e "Use a opção 1 para sincronizar primeiro."
             else
+                CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+                [[ -z "$CURRENT_BRANCH" ]] && CURRENT_BRANCH="main"
+
+                echo -e "${BLUE}📦 Verificando alterações locais...${NC}"
+                
+                # Adiciona tudo (novos arquivos, modificados e excluídos)
+                git add -A
+
+                # Se houver alterações pendentes, cria um commit automático
+                if [[ -n $(git status --porcelain) ]]; then
+                    echo -e "${BLUE}📝 Salvando alterações locais em um commit...${NC}"
+                    git commit -m "🛠️ chores: sincronização automática de arquivos"
+                else
+                    echo -e "${YELLOW}ℹ️ Nenhuma alteração nova detectada na pasta para commitar.${NC}"
+                fi
+
                 echo -e "📡 Enviando branch ${GREEN}$CURRENT_BRANCH${NC} para ${GREEN}origin${NC}..."
                 
+                # Tenta enviar as alterações
                 if git push -u origin "$CURRENT_BRANCH"; then
                     echo -e "\n${GREEN}┌──────────────────────────────────────────┐${NC}"
-                    echo -e "${GREEN}│      🚀 SUCESSO! PROJETO ATUALIZADO      │${NC}"
+                    echo -e "${GREEN}│         🚀 SUCESSO! PROJETO ATUALIZADO   │${NC}"
                     echo -e "${GREEN}└──────────────────────────────────────────┘${NC}"
                     echo -e "✨ Seus arquivos já estão seguros no GitHub."
                 else
                     echo -e "\n${RED}❌ FALHA NO PUSH!${NC}"
                     echo -e "Dica: Talvez existam mudanças no GitHub que você não tem localmente."
-                    echo -e "Tente usar a opção ${YELLOW}4) Pull${NC} antes de tentar o Push novamente."
+                    echo -e "Tente usar a opção ${YELLOW}1) Sincronizar${NC} ou ${YELLOW}4) Pull${NC} antes de tentar o Push novamente."
                 fi
             fi
             
             pause
             ;;
 
-        4) # PULL - ATUALIZAR REPOSITÓRIO LOCAL
+        4) # PULL - ATUALIZAR / RECUPERAR DO REPOSITÓRIO
             printf "\033[H\033[J"
             get_context
 
-            echo -e "${YELLOW}⬇️  BUSCANDO ATUALIZAÇÕES NO GITHUB...${NC}"
+            echo -e "${YELLOW}⬇️  BUSCANDO ATUALIZAÇÕES E RECUPERANDO ARQUIVOS DO GITHUB...${NC}"
 
             if ! git remote | grep -q "origin"; then
                 echo -e "${RED}❌ Erro: Remote 'origin' não encontrado.${NC}"
             else
+                CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+                [[ -z "$CURRENT_BRANCH" ]] && CURRENT_BRANCH="main"
+
                 echo -e "📡 Sincronizando branch ${GREEN}$CURRENT_BRANCH${NC}..."
                 
-                if git pull origin "$CURRENT_BRANCH" --rebase; then
+                # Baixa as novidades do remoto sem aplicar na marra ainda
+                git fetch origin
+
+                # Pergunta se o usuário quer descartar alterações locais (arquivos apagados/modificados por engano)
+                echo -e "${YELLOW}Deseja descartar alterações locais e restaurar a pasta exatamente como está no GitHub?${NC}"
+                read -p "(Isso recuperará arquivos apagados por engano) [y/n]: " restaurar_tudo
+
+                if [[ "$restaurar_tudo" =~ ^[Yy]$ ]]; then
+                    echo -e "${BLUE}🔄 Redefinindo pasta local para o estado exato de origin/$CURRENT_BRANCH...${NC}"
+                    git reset --hard "origin/$CURRENT_BRANCH"
+                    git clean -fd  # Remove arquivos locais que não estão no git (opcional, mas limpa a pasta)
                     echo -e "\n${GREEN}┌──────────────────────────────────────────┐${NC}"
-                    echo -e "${GREEN}│       ✅ REPOSITÓRIO ATUALIZADO!         │${NC}"
+                    echo -e "${GREEN}│      ✅ PASTA RESTAURADA COM SUCESSO!    │${NC}"
                     echo -e "${GREEN}└──────────────────────────────────────────┘${NC}"
-                    echo -e "✨ Seu código local está em sincronia com a nuvem."
+                    echo -e "✨ Seus arquivos foram recuperados do GitHub."
                 else
-                    echo -e "\n${RED}⚠️  ATENÇÃO: CONFLITO DETECTADO!${NC}"
-                    echo -e "Resolva os conflitos manualmente antes de continuar."
+                    # Tenta o pull normal (merge seguro sem rebase para evitar conflito chato)
+                    if git pull origin "$CURRENT_BRANCH"; then
+                        echo -e "\n${GREEN}┌──────────────────────────────────────────┐${NC}"
+                        echo -e "${GREEN}│       ✅ REPOSITÓRIO ATUALIZADO!         │${NC}"
+                        echo -e "${GREEN}└──────────────────────────────────────────┘${NC}"
+                        echo -e "✨ Seu código local está em sincronia com a nuvem."
+                    else
+                        echo -e "\n${RED}⚠️  ATENÇÃO: CONFLITO DETECTADO!${NC}"
+                        echo -e "Houve divergência entre o seu código e o GitHub."
+                        echo -e "Dica: Se você apagou arquivos por engano, execute a opção 4 novamente e escolha 'y' para restaurar."
+                    fi
                 fi
             fi
 
@@ -532,23 +580,63 @@ while true; do
             pause
             ;;
 
-        7) # RESET (SEGURO)
+        7) # RESET PARA UM COMMIT ESPECÍFICO
             printf "\033[H\033[J"
             get_context
 
             echo -e "${RED}┌──────────────────────────────────────────┐${NC}"
-            echo -e "${RED}│          ⚠️  AVISO DE RESET SEGURO        │${NC}"
+            echo -e "${RED}│          ⚠️  RESET PARA UM COMMIT        │${NC}"
             echo -e "${RED}└──────────────────────────────────────────┘${NC}"
-            echo -e "Isso irá descartar todas as alterações não salvas nos arquivos existentes."
-            echo -e "\n${YELLOW}Tem certeza que deseja continuar? (y/n)${NC}"
-            read -rp "👉 Escolha: " CONFIRM
+            echo -e "Isso irá reverter a pasta local e os arquivos para um commit específico."
+            echo -e "Qualquer alteração posterior a esse commit será ignorada.\n"
+            
+            # Mostra uma lista rápida dos últimos commits para ajudar a lembrar o hash/código
+            echo -e "${BLUE}📋 Últimos commits do projeto:${NC}"
+            git log --oneline -n 10
+            echo ""
 
-            if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
-                echo -e "\n${YELLOW}⏪ Restaurando arquivos para o último commit...${NC}"
-                git checkout .
-                echo -e "\n${GREEN}✅ Reset concluído!${NC}"
+            read -rp "👉 Digite o hash (código) do commit para o qual deseja voltar: " COMMIT_HASH
+
+            if [[ -z "$COMMIT_HASH" ]]; then
+                echo -e "\n${YELLOW}⚠️ Nenhum commit informado. Operação cancelada.${NC}"
             else
-                echo -e "\n${BLUE}ℹ️  Operação cancelada pelo usuário.${NC}"
+                echo -e "\n${YELLOW}Tem certeza que deseja voltar a pasta para o commit $COMMIT_HASH? (y/n)${NC}"
+                read -rp "👉 Escolha: " CONFIRM
+
+                if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+                    echo -e "\n${YELLOW}⏪ Revertendo projeto para o commit $COMMIT_HASH...${NC}"
+                    
+                    # Força o repositório local a voltar para o commit informado
+                    if git reset --hard "$COMMIT_HASH"; then
+                        # Remove arquivos criados após esse commit que não faziam parte dele
+                        git clean -fd
+                        
+                        echo -e "\n${GREEN}✅ Reset local concluído com sucesso!${NC}"
+                        
+                        # Segunda pergunta: Tornar permanente no GitHub (Opção A) ou manter apenas local (Opção B)?
+                        echo -e "\n${YELLOW}Deseja tornar essa alteração permanente no GitHub?${NC}"
+                        read -rp "👉 Enviar para o GitHub? (y/n): " PERMANENTE
+
+                        if [[ "$PERMANENTE" =~ ^[Yy]$ ]]; then
+                            CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+                            [[ -z "$CURRENT_BRANCH" ]] && CURRENT_BRANCH="main"
+                            
+                            echo -e "${BLUE}📡 Atualizando o GitHub (push --force)...${NC}"
+                            if git push origin "$CURRENT_BRANCH" --force; then
+                                echo -e "\n${GREEN}🚀 Sucesso! GitHub atualizado e sincronizado com o commit $COMMIT_HASH.${NC}"
+                            else
+                                echo -e "\n${RED}❌ Falha ao atualizar o GitHub.${NC}"
+                            fi
+                        else
+                            echo -e "\n${BLUE}ℹ️ Operação mantida apenas localmente (Opção B). O GitHub continua intacto.${NC}"
+                            echo -e "Dica: Se quiser voltar ao normal depois, use a opção 1 ou 4."
+                        fi
+                    else
+                        echo -e "\n${RED}❌ Erro: O hash do commit informado parece inválido.${NC}"
+                    fi
+                else
+                    echo -e "\n${BLUE}ℹ️ Operação cancelada pelo usuário.${NC}"
+                fi
             fi
 
             pause
@@ -800,7 +888,11 @@ while true; do
             
         0) # SAIR
             printf "\033[H\033[J"
-            echo -e "${GREEN} Atividades encerradas no DevLab Manager. Até logo! 👋${NC}\n"
+            echo -e "${YELLOW}┌────────────────────────────────────────────────────────────┐${NC}"
+            echo -e "${YELLOW}│    👋 Atividades encerradas no DevLab Manager. Até logo!   │${NC}"
+            echo -e "${YELLOW}└────────────────────────────────────────────────────────────┘${NC}"
+            echo
+            read -rp "Pressione ENTER para fechar o terminal..."
             exit 0
             ;;
 
